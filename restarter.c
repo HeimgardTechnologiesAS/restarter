@@ -475,8 +475,9 @@ void  makeargv (char *buf, char **argv) {
 void showUsage() {
     printf ("\nCool Agent, remote execution client. (https://bitbucket.org/sivann/restarter)\n");
     printf ("Usage: restarter [-d] [-h] [-t timeout] [-c command]\n");
+    printf ("\t-c [command]\tcommand to execute, include arguments in quotes. Mandatory.\n");
     printf ("\t-d\t\tdebug\n");
-    printf ("\t-c [command]\tpath of command\n");
+    printf ("\t-s\t\tuse a shell to execute command(s)\n");
     printf ("\t-t\t\ttimeout: terminate process after timeout seconds\n");
     printf("\n");
 }
