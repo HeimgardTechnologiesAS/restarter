@@ -24,6 +24,7 @@ typedef struct {
     char cmd_type;
     int command_restart_period;
     int command_timeout;
+    int syslog;
     int max_children;
 } option_s;
 
@@ -37,7 +38,7 @@ void sigchildhdl_GetExitStatus (int sig) ;
 void sigalarm_CommandKiller (int signum) ;
 void showUsage();
 void showVersion();
-void deepSleep(unsigned int);
+void deepSleep(unsigned long int);
 void  makeargv(char *buf, char **argv) ;
 char *str_replace (const char *string, const char *substr, const char *replacement);
 void setWaitStatus(int status) ;

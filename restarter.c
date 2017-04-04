@@ -71,21 +71,32 @@ int main (int argc, char *argv[]) {
 
     /* Defaults */
     options.debug=0;
+    options.max_children=1;
+    options.syslog=0;
     options.command_restart_period=3;
     options.command_timeout=0;
-    options.max_children=2;
 
     /* initialize in case options are missing from .ini */
     cmd[0]=0;
 
     /* Parse Options */
-    while ( (opt = getopt (argc, argv, "r:t:hdc:s") ) != -1) {
+    while ( (opt = getopt (argc, argv, "m:r:t:hdc:sl") ) != -1) {
         switch (opt) {
         case 'd':
             options.debug++;
             break;
+        case 'l':
+            options.syslog=1;
+            break;
         case 's':
             options.cmd_type='P';
+            break;
+        case 'm':
+            options.max_children=atoi(optarg);
+            if (options.max_children<=0) {
+                fprintf(stderr,"Invalid max_children specified (-r %s)\n",optarg);
+                exit (2);
+            }
             break;
         case 'r':
             options.command_restart_period=atoi(optarg);
@@ -153,31 +164,37 @@ void mainloop() {
     while (1) {
         if (options.debug) {
             printf ("\n[%d]:Loop\n",getpid());
-            printf("Running: (%s)\n",cmd);
+            printf("Executing: (%s)\n",cmd);
         }
-        syslog (LOG_INFO, "Running: (%s)",cmd);
+
+        syslog (LOG_INFO, "Executing: (%s)",cmd);
         runCommand (cmd,options.cmd_type,cmd_id,options.command_timeout);
-        while (nchildren) {
+        if (options.debug) 
+            printf("SLEEPING 1sec\n");
+        //sleep(1);
+
+        deepSleep (1000);
+
+        while (nchildren == options.max_children) {
             if (options.debug) {
                 syslog(LOG_INFO,"I have %d children, waiting for status change",nchildren);
             }
-            deepSleep (options.command_restart_period);
+            deepSleep (options.command_restart_period*1000);
         }
     }
 
 
 }
 
-
-/* sleep, uninterrupted by signals */
-void deepSleep (unsigned int seconds) {
-    unsigned int rem;
-
-    if (options.debug)
-        fprintf (stderr,"[%d]:deepSleep:sleeping for %d seconds\n",getpid(),seconds);
-
-    for (rem=seconds; rem;)
-        rem=sleep (rem);
+void deepSleep(unsigned long milisec)
+{
+    struct timespec req={0};
+    time_t sec=(int)(milisec/1000);
+    milisec=milisec-(sec*1000);
+    req.tv_sec=sec;
+    req.tv_nsec=milisec*1000000L;
+    while(nanosleep(&req,&req)==-1)
+         continue;
 }
 
 /* kill cmd_pid (for timeout) */
@@ -191,7 +208,7 @@ void sigalarm_CommandKiller (int signum) {       /* parent SIGALRM handler     *
         exit (errno);
     }
 
-    deepSleep (TIMEOUT_KILL_SEC);
+    deepSleep (TIMEOUT_KILL_SEC*1000);
 
     /* if pid still exists, kill -9 */
     if (kill (cmd_pid,0) )
@@ -401,7 +418,11 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
                     break;
                 }
                 strcat (buf,b);
-                syslog (LOG_INFO,"%s:read chunk %d,  %s",cmd,message_chunk,b);
+                if (options.syslog) {
+                    syslog (LOG_INFO,"%s:read chunk %d,  %s",cmd,message_chunk,b);
+                }
+                else
+                    fprintf (stdout,"%s",b);
 
                 if (options.debug) {
                     fprintf (stderr,"[%d]: readloop: (%s)",getpid(),b);
@@ -430,7 +451,7 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
                 fprintf (stderr,"[%d]:Will now post on (%s)\n", getpid(), post_result_url);
             }
 
-            fprintf(stderr,"restarter: output: %s\nExit status:%d Exit Reason%s\n", buf, cmd_exitstatus, cmd_exitreason) ;
+            fprintf(stderr,"restarter: output: %s\nExit status:%d Exit Reason:%s\n", buf, cmd_exitstatus, cmd_exitreason) ;
             //sleep(5); //for TCP LINGER, now set inside a curl callback
 
             if (options.debug)
@@ -479,6 +500,8 @@ void showUsage() {
     printf ("\t-d\t\tdebug\n");
     printf ("\t-s\t\tuse a shell to execute command(s)\n");
     printf ("\t-t\t\ttimeout: terminate process after timeout seconds\n");
+    printf ("\t-l\t\tsyslog: redirect command stdout and stderr to syslog\n");
+    printf ("\t-m\t\tmultiple: keep multiple instances of process running\n");
     printf("\n");
 }
 
