@@ -17,6 +17,7 @@
  */
 
 #ifndef HAVE_STRLCPY
+#ifndef __APPLE__
 
 #include <sys/types.h>
 #include <string.h>
@@ -51,9 +52,11 @@ size_t strlcpy(char *dst, const char *src, size_t siz)
 	return(s - src - 1);	/* count does not include NUL */
 }
 
+#endif 
 #endif /* !HAVE_STRLCPY */
 
 #ifndef HAVE_STRLCAT
+#ifndef __APPLE__
 
 size_t strlcat(char *dst, const char *src, size_t siz)
 {
@@ -82,5 +85,6 @@ size_t strlcat(char *dst, const char *src, size_t siz)
 	return(dlen + (s - src));	/* count does not include NUL */
 }
 
-#endif /* !HAVE_STRLCAT */
+#endif /* APPLE*/
+#endif 
 

@@ -5,16 +5,14 @@
 
 */
 
-/* Get strsignal() declaration from <string.h> */
-#define _POSIX_C_SOURCE
-#define _GNU_SOURCE
+#include <sys/wait.h> //before _POSIX__SOURCE to get WCOREDUMP
 
+#define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-
-#include <string.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -30,10 +28,11 @@
 #include <sys/resource.h>
 #include <limits.h>
 #include <syslog.h>
+
+#ifndef __APPLE__
 #include <sys/klog.h>
-
 #include <sys/prctl.h>
-
+#endif
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -188,7 +187,7 @@ void mainloop() {
 
 void deepSleep(unsigned long milisec)
 {
-    struct timespec req={0};
+    struct timespec req;
     time_t sec=(int)(milisec/1000);
 
     milisec=milisec-(sec*1000);
@@ -475,7 +474,7 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
         sigaddset (&signal_set, SIGCHLD);
         if (sigprocmask (SIG_UNBLOCK, &signal_set, NULL) == -1)  {
             sprintf (logmsg,"sigprocmask(unblock):%s",strerror (errno) );
-            syslog (LOG_WARNING,logmsg);
+            syslog (LOG_WARNING, "%s", logmsg);
         }
 
         nchildren++;
@@ -497,7 +496,8 @@ void  makeargv (char *buf, char **argv) {
                 *buf != '\t' && *buf != '\n' && *buf != '\r' )
             buf++;
     }
-    *argv = '\0';
+    //*argv = '\0';
+    *argv = (char)0;
 }
 
 void showUsage() {
@@ -572,9 +572,9 @@ void setWaitStatus (int status) {
         sprintf (s,"process exited, exit status=%d", WEXITSTATUS (status) );
     }
     else if (WIFSIGNALED (status) ) {
-        sprintf (s,"process killed by signal %d (%s)", WTERMSIG (status), strsignal (WTERMSIG (status) ) );
+        sprintf (s, "process killed by signal %d (%s)", WTERMSIG (status), strsignal (WTERMSIG (status) ) );
         if (WCOREDUMP (status) )
-            strcat (s," (core dumped)");
+            strcat (s, " (core dumped)");
     }
     else if (WIFSTOPPED (status) ) {
         sprintf (s,"process stopped by signal %d (%s)", WSTOPSIG (status), strsignal (WSTOPSIG (status) ) );

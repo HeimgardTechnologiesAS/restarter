@@ -1,5 +1,3 @@
-#ifndef __COOLAGENT_H
-#define __COOLAGENT_H
 extern const char *gitversion;
 extern const char *gitdate;
 extern const char *compdate;
@@ -44,8 +42,10 @@ char *str_replace (const char *string, const char *substr, const char *replaceme
 void setWaitStatus(int status) ;
 void dump(const char *text, FILE *stream, unsigned char *ptr, size_t size);
 int strlen_no_ws(char *str) ;
+#ifndef __APPLE__
 size_t strlcpy(char *dst, const char *src, size_t siz); /* like strncpy but always null-terminates */
 size_t strlcat(char *dst, const char *src, size_t siz);
+#endif
 int ini_cb_handler (const char *section, const char *key, const char *value, void *userdata) ;
 void getAdditionalInfo();
 void lock_or_act(char * lockfn,int action);
@@ -55,4 +55,3 @@ void update_agent(char **argv,char * arch, unsigned long int) ;
 int restart(char **argv);
 void mainloop();
 
-#endif
