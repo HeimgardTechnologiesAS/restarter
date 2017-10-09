@@ -125,6 +125,7 @@ int main (int argc, char *argv[]) {
     }
 
     if (cmd[0]==0) {
+		showUsage();
         fprintf(stderr,"Command not specified (-c)\n");
         exit(0);
     }
@@ -501,7 +502,7 @@ void  makeargv (char *buf, char **argv) {
 }
 
 void showUsage() {
-    printf ("\nCool Agent, remote execution client. (https://bitbucket.org/sivann/restarter)\n");
+    printf ("\nRestarter. (https://bitbucket.org/sivann/restarter)\n");
     printf ("Usage: restarter [-d] [-h] [-t timeout] [-c command]\n");
     printf ("\t-c [command]\tcommand to execute, include arguments in quotes. Mandatory.\n");
     printf ("\t-d\t\tdebug\n");
