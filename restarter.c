@@ -70,6 +70,7 @@ int main (int argc, char *argv[]) {
 
     /* Defaults */
     options.debug=0;
+    options.cmd_type='C';
     options.max_children=1;
     options.syslog=0;
     options.command_restart_period=3;
@@ -168,11 +169,9 @@ void mainloop() {
         }
 
         syslog (LOG_INFO, "Executing: (%s)",cmd);
-        runCommand (cmd,options.cmd_type,cmd_id,options.command_timeout);
+        runCommand (cmd, options.cmd_type, cmd_id, options.command_timeout);
         if (options.debug) 
             printf("SLEEPING 1sec\n");
-        //sleep(1);
-
         deepSleep (1000);
 
         while (nchildren == options.max_children) {
@@ -267,8 +266,9 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
     sprintf (post_result_url,"%s/ca/agents/%s/commands/%lu/result",options.server_url, options.agent_id, cmd_id);
     sprintf (post_tunnelport_url,"%s/ca/agents/%s/commands/%lu/tunnelport",options.server_url, options.agent_id, cmd_id);
 
-    if (options.debug)
-        printf ("runCommand(%s,%d)\n",cmd,timeout);
+    if (options.debug) {
+        printf ("runCommand(%s,%c,%ld,%d)\n",cmd,cmd_type,cmd_id,timeout);
+	}
 
     //block sigchld signals so it stays blocked on child (signal handler set in main())
     sigemptyset (&signal_set);
