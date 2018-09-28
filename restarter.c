@@ -160,15 +160,16 @@ int main (int argc, char *argv[]) {
 
 void mainloop() {
     //char cmd[256];
-    unsigned long cmd_id=1234;
+    unsigned long cmd_id=0;
 
     while (1) {
+		cmd_id ++;
         if (options.debug) {
             printf ("\n[%d]:Loop\n",getpid());
             printf("Executing: (%s)\n",cmd);
         }
 
-        syslog (LOG_INFO, "Executing: (%s)",cmd);
+        syslog (LOG_INFO, "Executing [%ld]: (%s)",cmd_id, cmd);
         runCommand (cmd, options.cmd_type, cmd_id, options.command_timeout);
         if (options.debug) 
             printf("SLEEPING 1sec\n");
@@ -254,7 +255,6 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
     unsigned long int mypid, child_pid;
     char buf[MAX_CMD_OUTPUT_LENGTH] ; //used to also hold command output
 
-    char post_result_url[512], post_tunnelport_url[512];
 
     char *args[64];
     int r,pipefd[2];
@@ -262,9 +262,6 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
 
     sigset_t signal_set;
     struct sigaction sa;
-
-    sprintf (post_result_url,"%s/ca/agents/%s/commands/%lu/result",options.server_url, options.agent_id, cmd_id);
-    sprintf (post_tunnelport_url,"%s/ca/agents/%s/commands/%lu/tunnelport",options.server_url, options.agent_id, cmd_id);
 
     if (options.debug) {
         printf ("runCommand(%s,%c,%ld,%d)\n",cmd,cmd_type,cmd_id,timeout);
@@ -356,11 +353,11 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
                     sprintf (logmsg,"sigaction (ign):%s",strerror (errno) );
                     syslog (LOG_ERR,"%s",logmsg);
                 }
-                //signal(SIGCHLD, SIG_IGN);
-                if (options.debug)
-                    printf ("[%d]:Before exec command id:%ld\n", getpid(),cmd_id);
 
-                newcmd=str_replace (cmd,"#ssh_client#","");
+				newcmd=str_replace (cmd,"#ssh_client#","");
+
+                if (options.debug)
+                    printf ("[%d]:Before exec command id:%ld\n", getpid(), cmd_id);
 
                 i=0;
                 while ( (dup2 (pipefd[1], 1) == -1) && (errno == EINTR) && i < 100) {
@@ -409,30 +406,41 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
             close (pipefd[1]); //close write-end of pipe
 
             if (options.debug)
-                printf ("[%d]:Reading child %d output\n", getpid(), cmd_pid);
+                printf ("[%d]:Reading command pid %d output\n", getpid(), cmd_pid);
 
             buf[0]=b[0]=0;
             //read command output in chunks until buf is full
             message_chunk = 0;
             while ( (r=read (pipefd[0], b, sizeof (b)-1) ) != 0) {
+				if (r<0) {
+					if (errno==EINTR) 
+						continue;
+					else {
+						fprintf (stderr,"ERROR: read():%s",strerror (errno) );
+					}
+					break;
+				}
+
                 b[r]=0;
                 message_chunk ++;
                 len+=r;
                 if (len>=sizeof (buf) ) {
                     sprintf (logmsg,
-                             "[%d]: WARNING: readloop: command %ld output > sizeofbuf (%ld):truncated\n", getpid(), cmd_id, sizeof (buf) );
+                             "[%d]: WARNING: readloop: command id %ld output > sizeofbuf (%ld):truncated\n", getpid(), cmd_id, sizeof (buf) );
                     syslog (LOG_ERR,"%s",logmsg);
                     break;
                 }
+
                 strcat (buf,b);
+
                 if (options.syslog) {
-                    syslog (LOG_INFO,"%s:read chunk %d,  %s",cmd,message_chunk,b);
+                    syslog (LOG_INFO,"%s:read chunk %d,  %s",cmd, message_chunk, b);
                 }
                 else
                     fprintf (stdout,"%s",b);
 
                 if (options.debug) {
-                    fprintf (stderr,"[%d]: readloop: (%s)",getpid(),b);
+                    fprintf (stderr,"[%d]: readloop: read_bytes:%d chunk:%d, strlen(b):%lu, strlen(buf):%lu, b:[%s]\n",getpid(), r, message_chunk, strlen(b), strlen(buf), b);
                 }
             }
             close (pipefd[0]);
@@ -453,16 +461,10 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
             }
 
             if (options.debug) {
-                fprintf (stderr,"[%d]: Done reading:[%s], cmd_exitstatus:%d, cmd_exitreason:%s\n",
+                fprintf (stderr,"[%d]: Done reading, buffer:[%s], cmd_exitstatus:%d, cmd_exitreason:%s\n",
                         getpid(), buf, cmd_exitstatus, cmd_exitreason);
-                fprintf (stderr,"[%d]:Will now post on (%s)\n", getpid(), post_result_url);
-            }
-
-            fprintf(stderr,"restarter: output: %s\nExit status:%d Exit Reason:%s\n", buf, cmd_exitstatus, cmd_exitreason) ;
+			}
             //sleep(5); //for TCP LINGER, now set inside a curl callback
-
-            if (options.debug)
-                fprintf (stderr,"[%d]:Done running\n", getpid() );
 
             exit (0);
 
@@ -498,7 +500,7 @@ void  makeargv (char *buf, char **argv) {
             buf++;
     }
     //*argv = '\0';
-    *argv = (char)0;
+    *argv = (char*)0;
 }
 
 void showUsage() {
