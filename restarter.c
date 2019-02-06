@@ -341,7 +341,6 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
                 syslog (LOG_ERR,"%s",logmsg);
             }
 
-
             if (! (cmd_pid=fork () ) ) {
                 //inside child, will be replaced by cmd via exec
                 char *newcmd;
@@ -512,6 +511,7 @@ void showUsage() {
     printf ("\t-t\t\ttimeout: terminate process after timeout seconds\n");
     printf ("\t-l\t\tsyslog: redirect command stdout and stderr to syslog\n");
     printf ("\t-m\t\tmultiple: keep multiple instances of process running\n");
+    printf ("\t-e\t\tvalid exit status: comma separated exit status which prevent restart\n");
     printf("\n");
 }
 
@@ -526,24 +526,23 @@ void sigchildhdl_GetExitStatus (int sig) {
         //nchildren--;
         setWaitStatus (e);
         if (options.debug) {
-            printf ("[%d]:sigchildhdl_GetExitStatus,waitpid: returned:%d, exit_reason:%s, nchildren now:%d\n", getpid(),r,cmd_exitreason,nchildren);
+            printf ("[%d]:SIGCHLD handler, child_pid:%d, waitpid returned:%d, exit_reason:%s, child exit status:%d, signal:%d, nchildren now:%d\n", 
+                    getpid(),child_pid,r,cmd_exitreason,e,sig,nchildren);
         }
+
+        sprintf (logmsg,"[%d]:SIGCHLD handler, child_pid:%d, waitpid returned:%d, exit_reason:%s, child exit status:%d, signal:%d, nchildren now:%d\n", 
+                getpid(),child_pid,r,cmd_exitreason,e,sig,nchildren);
+        syslog (LOG_ERR,"%s",logmsg);
     }
 
     if (child_pid == -1 && errno != ECHILD) {
-        sprintf (logmsg,"[%d]:sigchildhdl_GetExitStatus,ERROR: waitpid: %s\n",getpid(),strerror (errno) );
+        sprintf (logmsg,"[%d]:SIGCHLD handler ERROR: waitpid: %s\n",getpid(),strerror (errno) );
         syslog (LOG_ERR,"%s",logmsg);
     }
 
     if (child_pid == cmd_pid) { //just to be sure
         cmd_exitstatus = e;
     }
-
-    if (options.debug)
-        printf ("[%d]:sigchildhdl_GetExitStatus,signal:%d, child_pid:%d, child exited status:%d, nchildren:%d\n",
-                getpid (), sig, child_pid, e, nchildren);
-
-    //signal (SIGCHLD, sigchildhdl_GetExitStatus);
 
 }
 
