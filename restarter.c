@@ -57,6 +57,7 @@ int nchildren=0;           /* current number of forked children processes */
 int fastpolls=0;           /* remaining number of fast poll cycles */
 int popen_alarm_active=0;  /* interrupted by alarm, for expiring popen commands */
 char logmsg[MAX_CMD_LENGTH];
+char log_ident[128];
 int lock_fd;               /* file lock used to prevent agent to run twice */
 
 char cmd[1024]; // command to run
@@ -75,12 +76,13 @@ int main (int argc, char *argv[]) {
     options.syslog=0;
     options.command_restart_period=3;
     options.command_timeout=0;
+    strlcpy (log_ident, argv[0],128);
 
     /* initialize in case options are missing from .ini */
     cmd[0]=0;
 
     /* Parse Options */
-    while ( (opt = getopt (argc, argv, "m:r:t:hdc:sl") ) != -1) {
+    while ( (opt = getopt (argc, argv, "m:i:r:t:hdc:sl") ) != -1) {
         switch (opt) {
         case 'd':
             options.debug++;
@@ -112,6 +114,9 @@ int main (int argc, char *argv[]) {
                 exit (2);
             }
             break;
+        case 'i':
+            strlcpy (log_ident, optarg,128);
+            break;
         case 'c':
             strlcpy (cmd,optarg,512);
             break;
@@ -132,7 +137,7 @@ int main (int argc, char *argv[]) {
     }
 
     // Initialize syslog
-    openlog (argv[0], LOG_PID|LOG_PERROR , LOG_LOCAL3);
+    openlog (log_ident, LOG_PID|LOG_PERROR , LOG_LOCAL3);
     syslog (LOG_INFO, "Started by uid %d", getuid () );
 
     /* Acquire lock to prevent agents to run simultaneously. Replace previous process if requested by commandline option. */
@@ -512,6 +517,7 @@ void showUsage() {
     printf ("\t-l\t\tsyslog: redirect command stdout and stderr to syslog\n");
     printf ("\t-m\t\tmultiple: keep multiple instances of process running\n");
     printf ("\t-e\t\tvalid exit status: comma separated exit status which prevent restart\n");
+    printf ("\t-i\t\tsyslog ident string\n");
     printf("\n");
 }
 
