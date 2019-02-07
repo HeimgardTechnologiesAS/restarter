@@ -50,15 +50,20 @@
 option_s options;
 
 pid_t cmd_pid;             /* pid of execed command */
-int cmd_exitstatus;        /* exit status of cmd_pid */
+volatile sig_atomic_t cmd_exitstatus;        /* exit status of cmd_pid */
+volatile sig_atomic_t cmd_exitstatus2;        /* actual exit status of cmd_pid */
 char cmd_exitreason[128];
+volatile sig_atomic_t want_exit=0;
 
 int nchildren=0;           /* current number of forked children processes */
 int fastpolls=0;           /* remaining number of fast poll cycles */
 int popen_alarm_active=0;  /* interrupted by alarm, for expiring popen commands */
 char logmsg[MAX_CMD_LENGTH];
-char log_ident[128];
+char log_ident[256];
+char exit_valid[64];
+char pid_file[256];
 int lock_fd;               /* file lock used to prevent agent to run twice */
+int main_pid;
 
 char cmd[1024]; // command to run
 
@@ -66,7 +71,6 @@ int main (int argc, char *argv[]) {
     int opt;
     struct sigaction sa;
 
-    char lockfn[512];
     char lock_agentname[128];
 
     /* Defaults */
@@ -76,14 +80,20 @@ int main (int argc, char *argv[]) {
     options.syslog=0;
     options.command_restart_period=3;
     options.command_timeout=0;
+    options.run1=0;
     strlcpy (log_ident, argv[0],128);
+    pid_file[0] = 0;
+    exit_valid[0] = 0;
 
     /* initialize in case options are missing from .ini */
     cmd[0]=0;
 
     /* Parse Options */
-    while ( (opt = getopt (argc, argv, "m:i:r:t:hdc:sl") ) != -1) {
+    while ( (opt = getopt (argc, argv, "m:i:r:t:hdc:slp:1e:") ) != -1) {
         switch (opt) {
+        case '1':
+            options.run1++;
+            break;
         case 'd':
             options.debug++;
             break;
@@ -114,8 +124,14 @@ int main (int argc, char *argv[]) {
                 exit (2);
             }
             break;
+        case 'e':
+            strlcpy (exit_valid, optarg,64);
+            break;
         case 'i':
-            strlcpy (log_ident, optarg,128);
+            strlcpy (log_ident, optarg,256);
+            break;
+        case 'p':
+            strlcpy (pid_file, optarg,256);
             break;
         case 'c':
             strlcpy (cmd,optarg,512);
@@ -133,7 +149,7 @@ int main (int argc, char *argv[]) {
     if (cmd[0]==0) {
 		showUsage();
         fprintf(stderr,"Command not specified (-c)\n");
-        exit(0);
+        exit(1);
     }
 
     // Initialize syslog
@@ -143,8 +159,7 @@ int main (int argc, char *argv[]) {
     /* Acquire lock to prevent agents to run simultaneously. Replace previous process if requested by commandline option. */
     strlcpy(lock_agentname,"restarter",127);
     str_replace_char_inline(lock_agentname,'/','-');
-    snprintf(lockfn,512,"/tmp/restarter-%s.lock",lock_agentname);
-    lock_or_act(lockfn, 0);
+
 
 
     // add signal handler to count child processes and limit parallel commands (max_children)
@@ -156,12 +171,30 @@ int main (int argc, char *argv[]) {
         syslog (LOG_ERR,"%s",logmsg);
     }
 
+    if (options.run1) {
+        if (!strlen(pid_file)) {
+            showUsage();
+            fprintf(stderr,"-1 requested but pid_file not specified (-p)\n");
+            exit(2);
+        }
+        lock_or_act(pid_file, 0);
+    }
+
+    //setbuf(stdout,0);
+    main_pid = getpid();
+    signal(SIGUSR2, usr2_handler);
     mainloop(); 
 
     syslog (LOG_INFO, "After main loop, exiting");
 
     return 0;
 }
+
+void usr2_handler(int sig) {
+    syslog (LOG_NOTICE, "Exiting on USR2:%d",sig);
+    exit(0);
+}
+
 
 void mainloop() {
     //char cmd[256];
@@ -173,6 +206,7 @@ void mainloop() {
             printf ("\n[%d]:Loop\n",getpid());
             printf("Executing: (%s)\n",cmd);
         }
+
 
         syslog (LOG_INFO, "Executing [%ld]: (%s)",cmd_id, cmd);
         runCommand (cmd, options.cmd_type, cmd_id, options.command_timeout);
@@ -186,6 +220,7 @@ void mainloop() {
             }
             deepSleep (options.command_restart_period*1000);
         }
+
     }
 
 
@@ -280,7 +315,8 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
         syslog (LOG_ERR,"%s",logmsg);
     }
 
-    if (! (child_pid=fork () ) ) { //child
+    if (! (child_pid=fork () ) ) {
+        //child
         char pname[64];
         struct rlimit limit;
 
@@ -362,6 +398,23 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
 
                 if (options.debug)
                     printf ("[%d]:Before exec command id:%ld\n", getpid(), cmd_id);
+
+                sprintf (logmsg, "Starting [%s] with pid:%d", cmd, getpid());
+                syslog (LOG_INFO,"%s",logmsg);
+
+                /* Write pid to file (-p option)*/
+                if (strlen(pid_file)) {
+                    FILE * pfp ; 
+                    pfp = fopen(pid_file,"w");
+                    if (!pfp) {
+                        snprintf (logmsg,sizeof(logmsg),"fopen:%s:%s",pid_file,strerror (errno));
+                        syslog (LOG_ERR,"%s",logmsg);
+                    }
+                    else {
+                        fprintf(pfp,"%d",getpid());
+                        fclose(pfp);
+                    }
+                }
 
                 i=0;
                 while ( (dup2 (pipefd[1], 1) == -1) && (errno == EINTR) && i < 100) {
@@ -449,6 +502,8 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
             }
             close (pipefd[0]);
 
+            // Command exited at this point
+
             if (options.debug) {
                 fprintf (stderr,"[%d]: cmd_exitstatus:%d, cmd_exitreason:%s\n",getpid(), cmd_exitstatus, cmd_exitreason);
                 fprintf (stderr,"[%d]: waiting for child handler to update exitstatus\n",getpid() );
@@ -461,7 +516,12 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
                 if (sleepcount++ > 10) {
                     sprintf (logmsg,"[%d]: waited too much for exitstatus update, returning\n",getpid() );
                     syslog (LOG_WARNING,"%s",logmsg);
+                    break;
                 }
+            }
+
+            if (options.debug) {
+                fprintf (stderr,"[%d]: After loop: cmd_exitstatus:%d, cmd_exitreason:%s\n",getpid(), cmd_exitstatus, cmd_exitreason);
             }
 
             if (options.debug) {
@@ -470,6 +530,15 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
 			}
             //sleep(5); //for TCP LINGER, now set inside a curl callback
 
+            fprintf (stderr,"exit_valid:(%s), cmd_exitstatus2:%d\n",exit_valid, cmd_exitstatus2);
+            if (number_in_csv(cmd_exitstatus2,exit_valid)) {
+                sprintf (logmsg,"[%d]:%d is in the list of valid exit statuses (%s), exiting with sigusr2", getpid(),cmd_exitstatus2, exit_valid);
+                syslog (LOG_NOTICE,"%s",logmsg);
+                kill(main_pid, SIGUSR2);
+                exit(0);
+            }
+
+            fprintf (stderr,"[%d]: Exiting\n\n",getpid());
             exit (0);
 
         } //cmd==C || P
@@ -486,7 +555,7 @@ void runCommand (char * cmd, char cmd_type, unsigned long cmd_id, int timeout) {
 
         nchildren++;
         if (options.debug)
-            printf ("[%d]:I have %d children\n", getpid(), nchildren);
+            printf ("\n[%d]:I have %d children\n", getpid(), nchildren);
     }
 } // runCommand
 
@@ -509,7 +578,7 @@ void  makeargv (char *buf, char **argv) {
 
 void showUsage() {
     printf ("\nRestarter. (https://bitbucket.org/sivann/restarter)\n");
-    printf ("Usage: restarter [-d] [-h] [-t timeout] [-c command]\n");
+    printf ("Usage: restarter [-d] [-h] [-t timeout] [-c command] [-p pid_file]\n");
     printf ("\t-c [command]\tcommand to execute, include arguments in quotes. Mandatory.\n");
     printf ("\t-d\t\tdebug\n");
     printf ("\t-s\t\tuse a shell to execute command(s)\n");
@@ -518,12 +587,24 @@ void showUsage() {
     printf ("\t-m\t\tmultiple: keep multiple instances of process running\n");
     printf ("\t-e\t\tvalid exit status: comma separated exit status which prevent restart\n");
     printf ("\t-i\t\tsyslog ident string\n");
+    printf ("\t-p\t\twrite pid of new process to pid_file\n");
+    printf ("\t-1\t\tstart only if process specified by -p is not running\n");
     printf("\n");
 }
 
+// return true if n exists in csv
+int number_in_csv(int n, char *csv) {
+    int i;
+
+    while (sscanf(csv,"%d",&i)>0) {
+        if (i == n)
+            return 1;
+    }
+    return 0;
+}
 
 /* wait and set exit status in global var so it can be reported back (used by command executing process) */
-void sigchildhdl_GetExitStatus (int sig) {
+static void sigchildhdl_GetExitStatus (int sig) {
     int e, r;
     pid_t child_pid=0;
 
@@ -532,17 +613,19 @@ void sigchildhdl_GetExitStatus (int sig) {
         //nchildren--;
         setWaitStatus (e);
         if (options.debug) {
-            printf ("[%d]:SIGCHLD handler, child_pid:%d, waitpid returned:%d, exit_reason:%s, child exit status:%d, signal:%d, nchildren now:%d\n", 
+            printf ("[%d]:sigchildhdl_GetExitStatus SIGCHLD handler, child_pid:%d, waitpid returned:%d, exit_reason:%s, child exit status:%d, signal:%d, nchildren now:%d\n", 
                     getpid(),child_pid,r,cmd_exitreason,e,sig,nchildren);
         }
 
-        sprintf (logmsg,"[%d]:SIGCHLD handler, child_pid:%d, waitpid returned:%d, exit_reason:%s, child exit status:%d, signal:%d, nchildren now:%d\n", 
+        sprintf (logmsg,"[%d]:sigchildhdl_GetExitStatus SIGCHLD handler, child_pid:%d, waitpid returned:%d, exit_reason:%s, child exit status:%d, signal:%d, nchildren now:%d\n", 
                 getpid(),child_pid,r,cmd_exitreason,e,sig,nchildren);
         syslog (LOG_ERR,"%s",logmsg);
+
+
     }
 
     if (child_pid == -1 && errno != ECHILD) {
-        sprintf (logmsg,"[%d]:SIGCHLD handler ERROR: waitpid: %s\n",getpid(),strerror (errno) );
+        sprintf (logmsg,"[%d]:sigchildhdl_GetExitStatus SIGCHLD handler ERROR: waitpid: %s\n",getpid(),strerror (errno) );
         syslog (LOG_ERR,"%s",logmsg);
     }
 
@@ -562,7 +645,7 @@ void sigchildhdl_Count (int sig) {
     }
 
     if (options.debug)
-        printf ("[%d]:sigchildhdl_Count(signal:%d), child_pid:%d exited with:%d, nchildren:%d\n",
+        printf ("*** [%d]:sigchildhdl_Count(signal:%d), child_pid:%d exited with:%d, nchildren:%d\n",
                 getpid (), sig, child_pid, e, nchildren);
 
     //signal (SIGCHLD, sigchildhdl_Count);
@@ -576,8 +659,11 @@ void setWaitStatus (int status) {
 
     s[0]=0;
 
+    cmd_exitstatus2 = -999;
+
     if (WIFEXITED (status) ) {
         sprintf (s,"process exited, exit status=%d", WEXITSTATUS (status) );
+        cmd_exitstatus2 = WEXITSTATUS (status);
     }
     else if (WIFSIGNALED (status) ) {
         sprintf (s, "process killed by signal %d (%s)", WTERMSIG (status), strsignal (WTERMSIG (status) ) );
@@ -598,7 +684,7 @@ void setWaitStatus (int status) {
 
 
 
-/* check of lock exists, and act
+/* check if lock exists, and act
  * action == 0 : exit
  * action == 1 : replace previous lock-holding process: if lock is active kill pid in lockfile (restarter called with -f)
  */
@@ -680,17 +766,5 @@ void lock_or_act(char * lockfn, int action) {
     ftruncate(lock_fd, 0);
     lseek(lock_fd,0,SEEK_SET);
     write(lock_fd,b,strlen(b));
-}
-
-
-int restart(char **argv) {
-    if (execvp(argv[0], argv)) {
-        /* ERROR, handle this yourself */
-        sprintf (logmsg,"restart:execvp:%s",strerror (errno) );
-        syslog (LOG_ERR,"%s",logmsg);
-        return -1;
-    }
-
-    return 0;
 }
 
