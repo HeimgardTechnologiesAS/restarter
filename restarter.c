@@ -74,8 +74,7 @@ int main_pid;
 
 char cmd[1024];					// command to run
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 	int opt;
 	struct sigaction sa;
 
@@ -212,15 +211,13 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-void usr2_handler(int sig)
-{
+void usr2_handler(int sig) {
 	syslog(LOG_NOTICE, "Exiting on USR2:%d", sig);
 	exit(0);
 }
 
 
-void mainloop()
-{
+void mainloop() {
 	// char cmd[256];
 	unsigned long cmd_id = 0;
 
@@ -252,8 +249,7 @@ void mainloop()
 
 }
 
-void deepSleep(unsigned long milisec)
-{
+void deepSleep(unsigned long milisec) {
 	struct timespec req;
 	time_t sec = (int) (milisec / 1000);
 
@@ -273,8 +269,7 @@ void deepSleep(unsigned long milisec)
 /*
  * kill cmd_pid (for timeout) 
  */
-void sigalarm_CommandKiller(int signum)
-{								/* parent SIGALRM handler */
+void sigalarm_CommandKiller(int signum) {	/* parent SIGALRM handler */
 	int r;
 
 	r = kill(cmd_pid, SIGTERM);
@@ -305,8 +300,7 @@ void sigalarm_CommandKiller(int signum)
 	return;
 }
 
-void alarm_popen_handler()
-{								/* parent SIGALRM handler */
+void alarm_popen_handler() {	/* parent SIGALRM handler */
 	popen_alarm_active = 1;
 }
 
@@ -322,8 +316,7 @@ void alarm_popen_handler()
  */
 
 void
-runCommand(char *cmd, char cmd_type, unsigned long cmd_id, int timeout)
-{
+runCommand(char *cmd, char cmd_type, unsigned long cmd_id, int timeout) {
 	unsigned long int mypid, child_pid;
 	char buf[MAX_CMD_OUTPUT_LENGTH];	// used to also hold
 	// command output
@@ -641,8 +634,7 @@ runCommand(char *cmd, char cmd_type, unsigned long cmd_id, int timeout)
  * argv is an array of pointers to buf parts buf will be overwritten
  * (spaces replaced with 0) 
  */
-void makeargv(char *buf, char **argv)
-{
+void makeargv(char *buf, char **argv) {
 	while (*buf != '\0') {		/* if not the end of buf */
 		while (*buf == ' ' || *buf == '\t' || *buf == '\n' || *buf == '\r')
 			*buf++ = '\0';		/* replace white spaces with 0 */
@@ -656,8 +648,7 @@ void makeargv(char *buf, char **argv)
 	*argv = (char *) 0;
 }
 
-void showUsage()
-{
+void showUsage() {
 	printf("\nRestarter. (https://bitbucket.org/sivann/restarter)\n");
 	printf
 		("Usage: restarter [-d] [-h] [-t timeout] [-c command] [-p pid_file]\n");
@@ -680,8 +671,7 @@ void showUsage()
 }
 
 // return true if n exists in csv
-int number_in_csv(int n, char *csv)
-{
+int number_in_csv(int n, char *csv) {
 	int i;
 
 	while (sscanf(csv, "%d", &i) > 0) {
@@ -695,8 +685,7 @@ int number_in_csv(int n, char *csv)
  * wait and set exit status in global var so it can be reported back (used 
  * by command executing process) 
  */
-static void sigchildhdl_GetExitStatus(int sig)
-{
+static void sigchildhdl_GetExitStatus(int sig) {
 	int e, r;
 	pid_t child_pid = 0;
 
@@ -735,8 +724,7 @@ static void sigchildhdl_GetExitStatus(int sig)
 /*
  * just wait and count children (used by main process) 
  */
-void sigchildhdl_Count(int sig)
-{
+void sigchildhdl_Count(int sig) {
 	int e, r, child_pid = 0;
 
 	while ((r = waitpid(-1, &e, WNOHANG)) > 0) {
@@ -757,8 +745,7 @@ void sigchildhdl_Count(int sig)
 /*
  * Examine a wait() status using the W* macros 
  */
-void setWaitStatus(int status)
-{
+void setWaitStatus(int status) {
 	char s[128];
 
 	s[0] = 0;
@@ -792,8 +779,7 @@ void setWaitStatus(int status)
  * previous lock-holding process: if lock is active kill pid in lockfile
  * (restarter called with -f) 
  */
-void lock_or_act(char *lockfn, int action)
-{
+void lock_or_act(char *lockfn, int action) {
 	int ret, flags;
 	char b[64];
 
