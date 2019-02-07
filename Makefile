@@ -34,16 +34,7 @@ version.c: ../.git/HEAD ../.git/index Makefile
 clean:  
 	rm -f restarter core *.o
 
-#PATH TO STATIC COMPILED LIBCURL and openssl for wstaticcurl target
-# configure libcurl with --disable-sspi --disable-manual --disable-ldaps --disable-ldap --disable-rtsp --disable-pop3 --disable-imap --disable-smb --disable-gopher 
-#LOCAL_CURL=/home/sivann/sbx/curl-7.50.0/
-#LOCAL_SSL=/home/sivann/sbx/openssl-1.0.1t/
-LOCAL_CURL=/usr/local/
-LOCAL_SSL=/usr/local/ssl/
-
-#wstaticcurl: LIBS=-lssh2 -ldl -lidn -lrt $(LOCAL_CURL)/lib/.libs/libcurl.a $(LOCAL_SSL)/libssl.a $(LOCAL_SSL)/libcrypto.a
-wstaticcurl: LIBS=-lssh2 -lz -ldl -lidn -lrt $(LOCAL_CURL)/lib/libcurl.a $(LOCAL_SSL)/lib/libssl.a $(LOCAL_SSL)/lib/libcrypto.a
-wstaticcurl: CFLAGS=-I. -O0 -g -Wall -Wextra -I $(LOCAL_CURL)/include/ -I$(LOCAL_SSL)/include
+wstaticcurl: LIBS=-ldl -lidn -lrt 
 wstaticcurl: $(EXECUTABLE)
 
 bindist: restarter

@@ -19,6 +19,7 @@
 
 #include <sys/select.h>
 #include <sys/time.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -34,7 +35,6 @@
 
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <curl/curl.h>
 #include <sys/utsname.h>
 
 #include <restarter.h>
@@ -597,7 +597,6 @@ runCommand(char *cmd, char cmd_type, unsigned long cmd_id, int timeout) {
 						"[%d]: Done reading, buffer:[%s], cmd_exitstatus:%d, cmd_exitreason:%s\n",
 						getpid(), buf, cmd_exitstatus, cmd_exitreason);
 			}
-			// sleep(5); //for TCP LINGER, now set inside a curl callback
 
 			fprintf(stderr, "exit_valid:(%s), cmd_exitstatus2:%d\n",
 					exit_valid, cmd_exitstatus2);
