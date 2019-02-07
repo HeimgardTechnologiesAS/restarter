@@ -539,7 +539,7 @@ runCommand(char *cmd, char cmd_type, unsigned long cmd_id, int timeout) {
 				len += r;
 				if (len >= sizeof(buf)) {
 					sprintf(logmsg,
-							"[%d]: WARNING: readloop: command id %ld output > sizeofbuf (%lu):truncated\n",
+							"[%d]: WARNING: readloop: command id %ld output > sizeofbuf (%zu):truncated\n",
 							getpid(), cmd_id, sizeof(buf));
 					syslog(LOG_ERR, "%s", logmsg);
 					break;
