@@ -4,14 +4,9 @@ CC=gcc
 CFLAGS=-I. -O2 -g -Wall -Wextra
 EXECUTABLE=restarter
 
-LIBS=-lcurl
-
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
 
-ifeq ($(UNAME_S), Solaris)
-LIBS=-lsocket -lnsl
-endif
 
 OBJECTS=$(SOURCES:%.c=%.o) #substitution reference
 SOURCES=restarter.c helpers.c strl.c #version.c http.c
