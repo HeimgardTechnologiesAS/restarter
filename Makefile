@@ -34,9 +34,6 @@ version.c: ../.git/HEAD ../.git/index Makefile
 clean:  
 	rm -f restarter core *.o
 
-wstaticcurl: LIBS=-ldl -lidn -lrt 
-wstaticcurl: $(EXECUTABLE)
-
 bindist: restarter
 	echo $$PATH
 	cp restarter bindist/$(UNAME_M)/
