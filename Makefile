@@ -33,3 +33,7 @@ bindist: restarter
 	echo $$PATH
 	cp restarter bindist/$(UNAME_M)/
 	restarter -v > bindist/$(UNAME_M)/restarter.version
+
+install: restarter
+	install -d $(DESTDIR)$(PREFIX)/usr/bin/
+	install -m 555 restarter $(DESTDIR)$(PREFIX)/usr/bin/
