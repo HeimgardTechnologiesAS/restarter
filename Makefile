@@ -35,5 +35,5 @@ bindist: restarter
 	restarter -v > bindist/$(UNAME_M)/restarter.version
 
 install: restarter
-	install -d $(DESTDIR)$(PREFIX)/usr/bin/
-	install -m 555 restarter $(DESTDIR)$(PREFIX)/usr/bin/
+	install -d $(DESTDIR)$(PREFIX)/bin/
+	install -m 555 restarter $(DESTDIR)$(PREFIX)/bin/
