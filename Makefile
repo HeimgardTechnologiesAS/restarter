@@ -36,4 +36,4 @@ bindist: restarter
 
 install: restarter
 	install -d $(DESTDIR)$(PREFIX)/bin/
-	install -m 555 restarter $(DESTDIR)$(PREFIX)/bin/
+	install -m 0755 restarter $(DESTDIR)$(PREFIX)/bin/
